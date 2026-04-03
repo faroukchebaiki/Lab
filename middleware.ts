@@ -1,20 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/lib/neon-auth-server";
 
-import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/session";
-
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const session = token ? await verifySessionToken(token) : null;
-
-  if (session) {
-    return NextResponse.next();
-  }
-
-  const url = new URL("/", request.url);
-  url.searchParams.set("next", request.nextUrl.pathname);
-
-  return NextResponse.redirect(url);
-}
+export default auth.middleware({
+  loginUrl: "/auth/sign-in",
+});
 
 export const config = {
   matcher: ["/dashboard/:path*", "/reports/:path*"],

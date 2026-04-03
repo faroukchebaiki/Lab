@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { authClient } from "@/lib/neon-auth-client";
 import { type ReportRecord } from "@/lib/report-schema";
 
 type DashboardShellProps = {
@@ -40,11 +41,9 @@ export function DashboardShell({ reports, username }: DashboardShellProps) {
   const latestReport = reports[0];
 
   async function logout() {
-    const response = await fetch("/api/logout", {
-      method: "POST",
-    });
+    const { error } = await authClient.signOut();
 
-    if (!response.ok) {
+    if (error) {
       toast.error("Unable to log out.");
       return;
     }

@@ -1,25 +1,28 @@
 import { NextResponse } from "next/server";
 
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/neon-auth-server";
 import { buildReportRecord, reportInputSchema } from "@/lib/report-schema";
 import { readReports, saveReport } from "@/lib/storage";
 
 export async function GET() {
-  const session = await getSession();
+  const { data: session } = await auth.getSession();
 
-  if (!session) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const reports = await readReports();
+  const tokenResult = await auth.token().catch(() => null);
+  const accessToken =
+    typeof tokenResult?.data?.token === "string" ? tokenResult.data.token : null;
+  const reports = await readReports({ accessToken });
 
   return NextResponse.json({ reports });
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const { data: session } = await auth.getSession();
 
-  if (!session) {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -36,8 +39,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const report = buildReportRecord(parsed.data, session.username);
-  await saveReport(report);
+  const tokenResult = await auth.token().catch(() => null);
+  const accessToken =
+    typeof tokenResult?.data?.token === "string" ? tokenResult.data.token : null;
+  const report = buildReportRecord(parsed.data, session.user.name || session.user.email);
+  await saveReport(report, { accessToken });
 
   return NextResponse.json({ report });
 }

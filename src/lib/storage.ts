@@ -3,8 +3,6 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import postgres from "postgres";
-
 import {
   type ReportRecord,
   reportRecordSchema,
@@ -13,50 +11,83 @@ import {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "flash-journal-records.json");
+const DATA_API_URL = process.env.NEON_DATA_API_URL?.replace(/\/$/, "") ?? null;
+const DATA_API_KEY = process.env.NEON_DATA_API_KEY ?? null;
 
-let sqlClient: postgres.Sql | null = null;
-let tableReady: Promise<void> | null = null;
+type DataApiContext = {
+  accessToken?: string | null;
+};
 
-function getSqlClient() {
-  if (!process.env.DATABASE_URL) {
+type DataApiErrorBody = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
+function getAuthHeader(context?: DataApiContext) {
+  const token = context?.accessToken ?? DATA_API_KEY;
+
+  if (!token) {
+    throw new Error(
+      "Missing Neon Data API credentials. Set NEON_DATA_API_KEY or use a signed-in Neon Auth session with access token forwarding."
+    );
+  }
+
+  return `Bearer ${token}`;
+}
+
+async function requestDataApi<T>(
+  resource: string,
+  init: RequestInit,
+  context?: DataApiContext
+) {
+  if (!DATA_API_URL) {
     return null;
   }
 
-  if (!sqlClient) {
-    sqlClient = postgres(process.env.DATABASE_URL, {
-      max: 1,
-      prepare: false,
-      ssl: "require",
-    });
+  const response = await fetch(`${DATA_API_URL}/${resource}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      Authorization: getAuthHeader(context),
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...init.headers,
+    },
+    cache: "no-store",
+  });
+
+  if (response.ok) {
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    return (await response.json()) as T;
   }
 
-  return sqlClient;
-}
+  let errorBody: DataApiErrorBody | null = null;
 
-async function ensureRemoteTable() {
-  const sql = getSqlClient();
-
-  if (!sql) {
-    return;
+  try {
+    errorBody = (await response.json()) as DataApiErrorBody;
+  } catch {
+    errorBody = null;
   }
 
-  if (!tableReady) {
-    tableReady = (async () => {
-      await sql`
-        create table if not exists flash_reports (
-          id text primary key,
-          type text not null,
-          report_date date not null,
-          created_at timestamptz not null,
-          updated_at timestamptz not null,
-          created_by text not null,
-          payload jsonb not null
-        )
-      `;
-    })();
+  const tableMissing =
+    errorBody?.code === "42P01" ||
+    /flash_reports/i.test(errorBody?.message ?? "") ||
+    /relation .* does not exist/i.test(errorBody?.message ?? "");
+
+  if (tableMissing) {
+    throw new Error(
+      "The Neon Data API is reachable, but the 'flash_reports' table does not exist yet. Create it in Neon SQL Editor before using the app."
+    );
   }
 
-  await tableReady;
+  throw new Error(
+    errorBody?.message ||
+      `Neon Data API request failed with status ${response.status}.`
+  );
 }
 
 async function ensureLocalStore() {
@@ -89,29 +120,27 @@ async function writeLocalReports(reports: ReportRecord[]) {
   await fs.writeFile(DATA_FILE, JSON.stringify({ reports }, null, 2), "utf8");
 }
 
-async function readRemoteReports() {
-  const sql = getSqlClient();
-
-  if (!sql) {
+async function readRemoteReports(context?: DataApiContext) {
+  if (!DATA_API_URL) {
     return null;
   }
 
-  await ensureRemoteTable();
+  const rows = await requestDataApi<{ payload: unknown }[]>(
+    "flash_reports?select=payload&order=created_at.desc",
+    {
+      method: "GET",
+    },
+    context
+  );
 
-  const rows = await sql<{ payload: unknown }[]>`
-    select payload
-    from flash_reports
-    order by created_at desc
-  `;
-
-  return rows
+  return (rows ?? [])
     .map((row) => reportRecordSchema.safeParse(row.payload))
     .filter((result) => result.success)
     .map((result) => result.data);
 }
 
-export async function readReports() {
-  const remoteReports = await readRemoteReports();
+export async function readReports(context?: DataApiContext) {
+  const remoteReports = await readRemoteReports(context);
 
   if (remoteReports) {
     return remoteReports;
@@ -120,20 +149,18 @@ export async function readReports() {
   return readLocalReports();
 }
 
-export async function getReportById(id: string) {
-  const sql = getSqlClient();
+export async function getReportById(id: string, context?: DataApiContext) {
+  if (DATA_API_URL) {
+    const safeId = encodeURIComponent(id);
+    const rows = await requestDataApi<{ payload: unknown }[]>(
+      `flash_reports?id=eq.${safeId}&select=payload&limit=1`,
+      {
+        method: "GET",
+      },
+      context
+    );
 
-  if (sql) {
-    await ensureRemoteTable();
-
-    const rows = await sql<{ payload: unknown }[]>`
-      select payload
-      from flash_reports
-      where id = ${id}
-      limit 1
-    `;
-
-    if (!rows[0]) {
+    if (!rows?.[0]) {
       return null;
     }
 
@@ -145,31 +172,29 @@ export async function getReportById(id: string) {
   return reports.find((report) => report.id === id) ?? null;
 }
 
-export async function saveReport(report: ReportRecord) {
-  const sql = getSqlClient();
-
-  if (sql) {
-    await ensureRemoteTable();
-
-    await sql`
-      insert into flash_reports (
-        id,
-        type,
-        report_date,
-        created_at,
-        updated_at,
-        created_by,
-        payload
-      ) values (
-        ${report.id},
-        ${report.type},
-        ${report.meta.reportDate},
-        ${report.createdAt},
-        ${report.updatedAt},
-        ${report.createdBy},
-        ${sql.json(report)}
-      )
-    `;
+export async function saveReport(report: ReportRecord, context?: DataApiContext) {
+  if (DATA_API_URL) {
+    await requestDataApi(
+      "flash_reports",
+      {
+        method: "POST",
+        headers: {
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify([
+          {
+            id: report.id,
+            type: report.type,
+            report_date: report.meta.reportDate,
+            created_at: report.createdAt,
+            updated_at: report.updatedAt,
+            created_by: report.createdBy,
+            payload: report,
+          },
+        ]),
+      },
+      context
+    );
 
     return report;
   }

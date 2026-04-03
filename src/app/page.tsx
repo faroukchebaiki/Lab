@@ -1,32 +1,15 @@
 import { redirect } from "next/navigation";
 
-import { LoginForm } from "@/components/login-form";
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/neon-auth-server";
 
-type HomePageProps = {
-  searchParams: Promise<{
-    next?: string | string[];
-  }>;
-};
+export const dynamic = "force-dynamic";
 
-function getRedirectTarget(value?: string | string[]) {
-  const candidate = Array.isArray(value) ? value[0] : value;
+export default async function HomePage() {
+  const { data: session } = await auth.getSession();
 
-  if (!candidate || !candidate.startsWith("/")) {
-    return "/dashboard";
-  }
-
-  return candidate;
-}
-
-export default async function HomePage({ searchParams }: HomePageProps) {
-  const session = await getSession();
-
-  if (session) {
+  if (session?.user) {
     redirect("/dashboard");
   }
 
-  const params = await searchParams;
-
-  return <LoginForm redirectTo={getRedirectTarget(params.next)} />;
+  redirect("/auth/sign-in");
 }

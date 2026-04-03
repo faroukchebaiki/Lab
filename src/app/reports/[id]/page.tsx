@@ -1,8 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { ReportActions } from "@/components/reports/report-actions";
 import { ReportSheet } from "@/components/reports/report-sheet";
-import { requireSession } from "@/lib/auth";
+import { auth } from "@/lib/neon-auth-server";
 import { getReportById } from "@/lib/storage";
 
 type ReportPageProps = {
@@ -14,10 +14,17 @@ type ReportPageProps = {
 export const dynamic = "force-dynamic";
 
 export default async function ReportPage({ params }: ReportPageProps) {
-  await requireSession();
+  const { data: session } = await auth.getSession();
 
+  if (!session?.user) {
+    redirect("/auth/sign-in");
+  }
+
+  const tokenResult = await auth.token().catch(() => null);
+  const accessToken =
+    typeof tokenResult?.data?.token === "string" ? tokenResult.data.token : null;
   const { id } = await params;
-  const report = await getReportById(id);
+  const report = await getReportById(id, { accessToken });
 
   if (!report) {
     notFound();
