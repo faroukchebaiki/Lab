@@ -23,6 +23,7 @@ import { type ReportRecord } from "@/lib/report-schema";
 
 type DashboardShellProps = {
   reports: ReportRecord[];
+  reportsError?: string | null;
   username: string;
 };
 
@@ -30,7 +31,11 @@ function formatReportType(type: ReportRecord["type"]) {
   return type === "cao-horizontal" ? "CAO Horizontal" : "Hydration";
 }
 
-export function DashboardShell({ reports, username }: DashboardShellProps) {
+export function DashboardShell({
+  reports,
+  reportsError = null,
+  username,
+}: DashboardShellProps) {
   const router = useRouter();
 
   const caoCount = reports.filter((report) => report.type === "cao-horizontal").length;
@@ -132,6 +137,12 @@ export function DashboardShell({ reports, username }: DashboardShellProps) {
             </CardContent>
           </Card>
         </section>
+
+        {reportsError ? (
+          <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+            {reportsError}
+          </div>
+        ) : null}
 
         <Tabs defaultValue="create" className="mt-8 gap-6">
           <TabsList className="no-print">

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Barlow, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
-import { AuthProvider } from "@/components/auth-provider";
 import "./globals.css";
 
 const barlow = Barlow({
@@ -31,10 +30,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${barlow.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
-        <AuthProvider>{children}</AuthProvider>
+        {children}
         <Toaster richColors position="top-right" />
       </body>
     </html>

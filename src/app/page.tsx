@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/neon-auth-server";
+import { safeGetSession } from "@/lib/neon-auth-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const { data: session } = await auth.getSession();
+  const { data: session } = await safeGetSession();
 
   if (session?.user) {
     redirect("/dashboard");
