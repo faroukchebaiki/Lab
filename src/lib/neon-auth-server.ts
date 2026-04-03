@@ -3,11 +3,10 @@ import "server-only";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 
 function getCookieSecret() {
-  return (
-    process.env.NEON_AUTH_COOKIE_SECRET ??
-    process.env.AUTH_SECRET ??
-    "replace-this-with-a-long-random-secret"
-  );
+  const explicitSecret = process.env.NEON_AUTH_COOKIE_SECRET?.trim();
+  const fallbackSecret = process.env.AUTH_SECRET?.trim();
+
+  return explicitSecret || fallbackSecret || "replace-this-with-a-long-random-secret";
 }
 
 export const auth = createNeonAuth({
