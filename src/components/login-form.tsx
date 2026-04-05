@@ -121,6 +121,28 @@ export function LoginForm({
           </form>
         </CardContent>
       </Card>
+
+      <div className="flex flex-col items-center justify-between gap-2 px-1 text-center text-xs text-muted-foreground sm:flex-row sm:text-left">
+        <p>
+          Coded by{" "}
+          <a
+            href="https://www.farouk.uk"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+          >
+            Farouk
+          </a>
+        </p>
+        <a
+          href="https://www.farouk.uk/privacy"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+        >
+          Privacy Policy
+        </a>
+      </div>
     </div>
   );
 }

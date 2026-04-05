@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -10,11 +11,13 @@ export const metadata: Metadata = {
     "Daily laboratory journal with secure login, durable report storage, and printable PDF export.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const themeCookie = (await cookies()).get("theme")?.value;
+
   return (
     <html
       lang="en"
@@ -22,7 +25,7 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full bg-background text-foreground">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider defaultTheme={themeCookie}>{children}</ThemeProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>
