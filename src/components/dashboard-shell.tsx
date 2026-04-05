@@ -1,15 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   FileSpreadsheet,
   FlaskConical,
   LayoutDashboard,
   LogOut,
+  Menu,
+  MoonStar,
   Printer,
+  SunMedium,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 import { CaoHorizontalForm } from "@/components/reports/cao-horizontal-form";
@@ -17,6 +22,22 @@ import { HydrationForm } from "@/components/reports/hydration-form";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/neon-auth-client";
 import { type ReportRecord } from "@/lib/report-schema";
@@ -26,6 +47,11 @@ type DashboardShellProps = {
   reportsError?: string | null;
   username: string;
 };
+
+const navItems = [
+  { id: "create", label: "Create Reports", icon: FlaskConical },
+  { id: "saved", label: "Saved Reports", icon: FileSpreadsheet },
+] as const;
 
 function formatReportType(type: ReportRecord["type"]) {
   return type === "cao-horizontal" ? "CAO Horizontal" : "Hydration";
@@ -37,11 +63,20 @@ export function DashboardShell({
   username,
 }: DashboardShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [activeTab, setActiveTab] = useState("create");
 
-  const caoCount = reports.filter((report) => report.type === "cao-horizontal").length;
-  const hydrationCount = reports.filter(
-    (report) => report.type === "hydration"
-  ).length;
+  let caoCount = 0;
+  let hydrationCount = 0;
+
+  for (const report of reports) {
+    if (report.type === "cao-horizontal") {
+      caoCount += 1;
+    } else {
+      hydrationCount += 1;
+    }
+  }
 
   const latestReport = reports[0];
 
@@ -59,154 +94,246 @@ export function DashboardShell({
   }
 
   return (
-    <main className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="app-shell mx-auto max-w-7xl rounded-[2rem] border border-white/70 p-5 shadow-[0_24px_80px_rgba(54,74,44,0.14)] sm:p-8">
-        <header className="no-print flex flex-col gap-6 border-b border-border/80 pb-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-3">
-            <Badge className="rounded-full bg-primary/10 px-4 py-1 text-primary hover:bg-primary/10">
-              <LayoutDashboard className="mr-2 size-4" />
-              Flash Journal Dashboard
-            </Badge>
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight">
-                Welcome back, {username}
-              </h1>
-              <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
-                Create daily lab reports, keep every result archived, and open a
-                print-ready PDF sheet whenever you need it.
+    <SidebarProvider defaultOpen>
+      <Sidebar collapsible="icon" variant="inset">
+        <SidebarHeader className="gap-3 px-3 py-4">
+          <div className="flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent/60 px-3 py-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <LayoutDashboard className="size-5" />
+            </div>
+            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <p className="truncate text-sm font-semibold">Lab BMSD chaux</p>
+              <p className="truncate text-xs text-sidebar-foreground/70">
+                Daily reports
               </p>
             </div>
           </div>
+        </SidebarHeader>
 
-          <Button variant="outline" onClick={logout}>
-            <LogOut className="size-4" />
-            Logout
-          </Button>
-        </header>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      isActive={activeTab === item.id}
+                      onClick={() => setActiveTab(item.id)}
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <Card className="border-border/80 bg-white/88">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Total Reports</CardTitle>
-              <FileSpreadsheet className="size-5 text-primary" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-4xl font-semibold">{reports.length}</p>
-              <p className="text-sm text-muted-foreground">
-                Archived and ready for future lookup.
-              </p>
-            </CardContent>
-          </Card>
+          <SidebarSeparator />
 
-          <Card className="border-border/80 bg-white/88">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">CAO / Hydration</CardTitle>
-              <FlaskConical className="size-5 text-primary" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-4xl font-semibold">
-                {caoCount} / {hydrationCount}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Split by the two report formats from your workflow.
-              </p>
-            </CardContent>
-          </Card>
+          <SidebarGroup>
+            <SidebarGroupLabel>Quick Links</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Printable reports"
+                    isActive={pathname.startsWith("/reports/")}
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    <Printer />
+                    <span>Printable Reports</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-          <Card className="border-border/80 bg-white/88">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Latest Save</CardTitle>
-              <Printer className="size-5 text-primary" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-xl font-semibold">
-                {latestReport
-                  ? formatDistanceToNow(new Date(latestReport.createdAt), {
-                      addSuffix: true,
-                    })
-                  : "No reports yet"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {latestReport
-                  ? `${formatReportType(latestReport.type)} • ${format(
-                      new Date(latestReport.createdAt),
-                      "dd MMM yyyy, HH:mm"
-                    )}`
-                  : "Create the first report below."}
-              </p>
-            </CardContent>
-          </Card>
-        </section>
-
-        {reportsError ? (
-          <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
-            {reportsError}
+        <SidebarFooter className="px-3 pb-4">
+          <div className="group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-sm font-medium">{username}</p>
+            <p className="truncate text-xs text-sidebar-foreground/70">
+              Neon authenticated
+            </p>
           </div>
-        ) : null}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="flex-1"
+              onClick={() =>
+                setTheme(resolvedTheme === "dark" ? "light" : "dark")
+              }
+            >
+              {resolvedTheme === "dark" ? (
+                <SunMedium className="size-4" />
+              ) : (
+                <MoonStar className="size-4" />
+              )}
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="flex-1"
+              onClick={logout}
+            >
+              <LogOut className="size-4" />
+              <span className="sr-only">Logout</span>
+            </Button>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
 
-        <Tabs defaultValue="create" className="mt-8 gap-6">
-          <TabsList className="no-print">
-            <TabsTrigger value="create">Create Reports</TabsTrigger>
-            <TabsTrigger value="saved">Saved Reports</TabsTrigger>
-          </TabsList>
+      <SidebarInset className="min-h-svh">
+        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 sm:p-6">
+          <header className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="md:hidden">
+                <Menu className="size-4" />
+              </SidebarTrigger>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                  Laboratory Dashboard
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Minimal workflow for daily tests and archived reports.
+                </p>
+              </div>
+            </div>
+            <Badge variant="outline" className="hidden sm:inline-flex">
+              {username}
+            </Badge>
+          </header>
 
-          <TabsContent value="create" className="space-y-6">
-            <Tabs defaultValue="cao-horizontal" className="gap-6">
-              <TabsList className="no-print">
-                <TabsTrigger value="cao-horizontal">CAO Horizontal</TabsTrigger>
-                <TabsTrigger value="hydration">Hydration</TabsTrigger>
-              </TabsList>
-              <TabsContent value="cao-horizontal">
-                <CaoHorizontalForm />
-              </TabsContent>
-              <TabsContent value="hydration">
-                <HydrationForm />
-              </TabsContent>
-            </Tabs>
-          </TabsContent>
-
-          <TabsContent value="saved">
-            <Card className="border-border/80 bg-white/92">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold">
-                  Saved Reports
-                </CardTitle>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
               </CardHeader>
               <CardContent>
-                {reports.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center text-muted-foreground">
-                    No reports saved yet.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {reports.map((report) => (
-                      <div
-                        key={report.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-muted/25 p-4 lg:flex-row lg:items-center lg:justify-between"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">
-                              {formatReportType(report.type)}
-                            </Badge>
-                            <Badge variant="secondary">
-                              {report.meta.reportDate}
-                            </Badge>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold">
-                              {report.sectionTitle}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              Saved by {report.createdBy} •{" "}
-                              {formatDistanceToNow(new Date(report.createdAt), {
-                                addSuffix: true,
-                              })}
-                            </p>
-                          </div>
-                        </div>
+                <p className="text-3xl font-semibold">{reports.length}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Stored for future access.
+                </p>
+              </CardContent>
+            </Card>
 
-                        <div className="flex flex-wrap gap-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">CAO / Hydration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold">
+                  {caoCount} / {hydrationCount}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Split across both lab workflows.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="sm:col-span-2 xl:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Latest Save</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-lg font-semibold">
+                  {latestReport
+                    ? formatDistanceToNow(new Date(latestReport.createdAt), {
+                        addSuffix: true,
+                      })
+                    : "No reports yet"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {latestReport
+                    ? `${formatReportType(latestReport.type)} • ${format(
+                        new Date(latestReport.createdAt),
+                        "dd MMM yyyy, HH:mm"
+                      )}`
+                    : "Your first saved report will appear here."}
+                </p>
+              </CardContent>
+            </Card>
+          </section>
+
+          {reportsError ? (
+            <Card className="border-amber-400/60 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+              <CardContent className="pt-6 text-sm leading-6">
+                {reportsError}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="gap-4"
+          >
+            <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+              <TabsTrigger value="create">Create Reports</TabsTrigger>
+              <TabsTrigger value="saved">Saved Reports</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="create" className="space-y-6">
+              <Tabs defaultValue="cao-horizontal" className="gap-4">
+                <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+                  <TabsTrigger value="cao-horizontal">CAO Horizontal</TabsTrigger>
+                  <TabsTrigger value="hydration">Hydration</TabsTrigger>
+                </TabsList>
+                <TabsContent value="cao-horizontal">
+                  <CaoHorizontalForm />
+                </TabsContent>
+                <TabsContent value="hydration">
+                  <HydrationForm />
+                </TabsContent>
+              </Tabs>
+            </TabsContent>
+
+            <TabsContent value="saved">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-semibold">
+                    Saved Reports
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {reports.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                      No reports saved yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {reports.map((report) => (
+                        <div
+                          key={report.id}
+                          className="flex flex-col gap-4 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">
+                                {formatReportType(report.type)}
+                              </Badge>
+                              <Badge variant="secondary">
+                                {report.meta.reportDate}
+                              </Badge>
+                            </div>
+                            <div>
+                              <h3 className="font-medium">{report.sectionTitle}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Saved by {report.createdBy} •{" "}
+                                {formatDistanceToNow(new Date(report.createdAt), {
+                                  addSuffix: true,
+                                })}
+                              </p>
+                            </div>
+                          </div>
+
                           <Link
                             href={`/reports/${report.id}`}
                             className={buttonVariants({ variant: "outline" })}
@@ -214,15 +341,15 @@ export function DashboardShell({
                             Open Report
                           </Link>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </main>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

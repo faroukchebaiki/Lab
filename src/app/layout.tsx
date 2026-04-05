@@ -1,20 +1,8 @@
 import type { Metadata } from "next";
-import { Barlow, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
-
-const barlow = Barlow({
-  variable: "--font-barlow",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
 
 export const metadata: Metadata = {
   title: "Flash Journalier Lab",
@@ -31,10 +19,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${barlow.variable} ${plexMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full bg-background text-foreground">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>
