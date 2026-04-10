@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MoonStar, SunMedium } from "lucide-react";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,18 +20,29 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useTheme } from "@/components/theme-provider";
 import { authClient } from "@/lib/neon-auth-client";
 import { cn } from "@/lib/utils";
 
-type AuthMode = "sign-in" | "sign-up" | "forgot-password";
-type AuthView = AuthMode | "verify-email" | "reset-password";
+type AuthMode =
+  | "sign-in"
+  | "sign-up"
+  | "sign-up-success"
+  | "forgot-password"
+  | "reset-password"
+  | "verify-email";
+type AuthView = AuthMode;
 
 type LoginFormProps = React.ComponentProps<"div"> & {
   mode?: AuthMode;
+  resetToken?: string;
+  verifyToken?: string;
 };
 
 export function LoginForm({
   mode = "sign-in",
+  resetToken = "",
+  verifyToken = "",
   className,
   ...props
 }: LoginFormProps) {
@@ -40,173 +50,246 @@ export function LoginForm({
   const { resolvedTheme, setTheme } = useTheme();
   const [pending, setPending] = useState(false);
   const [view, setView] = useState<AuthView>(mode);
+  const [resetTokenState, setResetTokenState] = useState(resetToken);
   const [verificationEmail, setVerificationEmail] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
+  const verifyAttemptedRef = useRef(false);
 
   useEffect(() => {
     setView(mode);
   }, [mode]);
 
-  async function handleSignIn(formData: FormData) {
-    setPending(true);
+  useEffect(() => {
+    setResetTokenState(resetToken);
+  }, [resetToken]);
 
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-    const response = await authClient.signIn.email({
-      email,
-      password,
-      callbackURL: "/dashboard",
-    });
-    const { error } = response;
-
-    if (error) {
-      toast.error(error.message || "Unable to sign in.");
-      setPending(false);
+  useEffect(() => {
+    if (view !== "verify-email" || verifyAttemptedRef.current) {
       return;
     }
 
-    toast.success("Signed in.");
-    router.push("/dashboard");
-    router.refresh();
-    setPending(false);
+    verifyAttemptedRef.current = true;
+
+    if (!verifyToken) {
+      toast.error("This verification link is missing its token.");
+      router.replace("/auth/sign-in");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function verifyEmailToken() {
+      setPending(true);
+
+      try {
+        const { error } = await authClient.verifyEmail({
+          query: {
+            token: verifyToken,
+            callbackURL: "/dashboard",
+          },
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (error) {
+          toast.error(error.message || "Unable to verify email.");
+          router.replace("/auth/sign-in");
+          return;
+        }
+
+        toast.success("Email verified. You can sign in now.");
+        router.replace("/auth/sign-in");
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(getErrorMessage(error, "Unable to verify email."));
+          router.replace("/auth/sign-in");
+        }
+      } finally {
+        if (!cancelled) {
+          setPending(false);
+        }
+      }
+    }
+
+    void verifyEmailToken();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, verifyToken, view]);
+
+  async function handleSignIn(formData: FormData) {
+    setPending(true);
+
+    try {
+      const email = String(formData.get("email") ?? "").trim();
+      const password = String(formData.get("password") ?? "");
+      const response = await authClient.signIn.email({
+        email,
+        password,
+        callbackURL: "/dashboard",
+      });
+      const { error } = response;
+
+      if (error) {
+        if (isEmailVerificationError(error.message)) {
+          setVerificationEmail(email);
+        }
+        toast.error(error.message || "Unable to sign in.");
+        return;
+      }
+
+      toast.success("Signed in.");
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to sign in."));
+    } finally {
+      setPending(false);
+    }
   }
 
   async function handleSignUp(formData: FormData) {
     setPending(true);
 
-    const name = String(formData.get("name") ?? "").trim();
-    const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-    const { error } = await authClient.signUp.email({
-      name,
-      email,
-      password,
-    });
+    try {
+      const name = String(formData.get("name") ?? "").trim();
+      const email = String(formData.get("email") ?? "").trim();
+      const password = String(formData.get("password") ?? "");
+      const { error } = await authClient.signUp.email({
+        name,
+        email,
+        password,
+      });
 
-    if (error) {
-      toast.error(error.message || "Unable to create account.");
+      if (error) {
+        toast.error(error.message || "Unable to create account.");
+        return;
+      }
+
+      const verificationResponse = await authClient.sendVerificationEmail({
+        email,
+        callbackURL: `${window.location.origin}/auth/verify-email`,
+      });
+
+      if (verificationResponse.error) {
+        setVerificationEmail(email);
+        toast.error(
+          verificationResponse.error.message ||
+            "Account created, but the verification email could not be sent.",
+        );
+        setView("sign-up-success");
+        return;
+      }
+
+      setVerificationEmail(email);
+      toast.success("Account created. Check your email to verify your account.");
+      setView("sign-up-success");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to create account."));
+    } finally {
       setPending(false);
-      return;
     }
-
-    setVerificationEmail(email);
-    setView("verify-email");
-
-    const verificationResponse = await authClient.emailOtp.sendVerificationOtp({
-      email,
-      type: "email-verification",
-    });
-
-    if (verificationResponse.error) {
-      toast.error(verificationResponse.error.message || "Account created, but the verification code could not be sent.");
-      setPending(false);
-      return;
-    }
-
-    toast.success("Account created. Check your email for the verification code.");
-    setPending(false);
-  }
-
-  async function handleVerifyEmail(formData: FormData) {
-    setPending(true);
-
-    const email = String(formData.get("email") ?? "").trim();
-    const otp = String(formData.get("otp") ?? "").trim();
-    const { error } = await authClient.emailOtp.verifyEmail({
-      email,
-      otp,
-    });
-
-    if (error) {
-      toast.error(error.message || "Unable to verify email.");
-      setPending(false);
-      return;
-    }
-
-    toast.success("Email verified. You can sign in now.");
-    setView("sign-in");
-    setPending(false);
-  }
-
-  async function handleResendVerificationCode() {
-    setPending(true);
-
-    const { error } = await authClient.emailOtp.sendVerificationOtp({
-      email: verificationEmail,
-      type: "email-verification",
-    });
-
-    if (error) {
-      toast.error(error.message || "Unable to resend verification code.");
-      setPending(false);
-      return;
-    }
-
-    toast.success("Verification code sent.");
-    setPending(false);
   }
 
   async function handleForgotPassword(formData: FormData) {
     setPending(true);
 
-    const email = String(formData.get("email") ?? "").trim();
-    const { error } = await authClient.forgetPassword.emailOtp({
-      email,
-    });
+    try {
+      const email = String(formData.get("email") ?? "").trim();
+      const { error } = await authClient.requestPasswordReset({
+        email,
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
 
-    if (error) {
-      toast.error(error.message || "Unable to send reset code.");
+      if (error) {
+        toast.error(error.message || "Unable to send reset email.");
+        return;
+      }
+
+      toast.success("Reset email sent. Check your inbox for the password reset link.");
+      router.push("/auth/sign-in");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to send reset email."));
+    } finally {
       setPending(false);
-      return;
     }
-
-    setResetEmail(email);
-    setView("reset-password");
-    toast.success("Reset code sent. Check your email.");
-    setPending(false);
   }
 
   async function handleResetPassword(formData: FormData) {
     setPending(true);
 
-    const email = String(formData.get("email") ?? "").trim();
-    const otp = String(formData.get("otp") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
-    const { error } = await authClient.emailOtp.resetPassword({
-      email,
-      otp,
-      password,
-    });
+    try {
+      const newPassword = String(formData.get("password") ?? "");
+      const { error } = await authClient.resetPassword({
+        newPassword,
+        token: resetTokenState,
+      });
 
-    if (error) {
-      toast.error(error.message || "Unable to reset password.");
+      if (error) {
+        toast.error(error.message || "Unable to reset password.");
+        return;
+      }
+
+      toast.success("Password reset. You can sign in now.");
+      router.push("/auth/sign-in");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to reset password."));
+    } finally {
       setPending(false);
+    }
+  }
+
+  async function handleResendVerificationEmail() {
+    if (!verificationEmail) {
+      toast.error("Enter your email again, then try logging in to resend verification.");
       return;
     }
 
-    toast.success("Password reset. You can sign in now.");
-    setView("sign-in");
-    setPending(false);
+    setPending(true);
+
+    try {
+      const { error } = await authClient.sendVerificationEmail({
+        email: verificationEmail,
+        callbackURL: `${window.location.origin}/auth/verify-email`,
+      });
+
+      if (error) {
+        toast.error(error.message || "Unable to resend verification email.");
+        return;
+      }
+
+      toast.success("Verification email sent.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to resend verification email."));
+    } finally {
+      setPending(false);
+    }
   }
 
   const heading = view === "sign-up"
     ? "Sign up"
-    : view === "verify-email"
-      ? "Verify email"
-      : view === "forgot-password"
+    : view === "sign-up-success"
+      ? "Check your email"
+    : view === "forgot-password"
         ? "Forgot password"
         : view === "reset-password"
           ? "Reset password"
+          : view === "verify-email"
+            ? "Verifying email"
           : "Login";
 
   const description = view === "sign-up"
-    ? "Create an account, then verify your email with the code we send."
-    : view === "verify-email"
-      ? "Enter the verification code sent to your email to finish creating your account."
-      : view === "forgot-password"
-        ? "Enter your email and we will send you a reset code."
+    ? "Create an account, then verify it from the email Neon sends you."
+    : view === "sign-up-success"
+      ? "We have sent a confirmation email to your address."
+    : view === "forgot-password"
+        ? "Enter your email and we will send you a password reset link."
         : view === "reset-password"
-          ? "Enter the reset code from your email and choose a new password."
+          ? "Choose a new password for your account."
+          : view === "verify-email"
+            ? "We are confirming your email address."
           : "Enter your email and password to open the lab dashboard.";
 
   return (
@@ -287,6 +370,23 @@ export function LoginForm({
                   Sign up
                 </Link>
               </div>
+              {verificationEmail ? (
+                <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <p>
+                    If your email is not confirmed yet, resend the verification email for{" "}
+                    <span className="font-medium text-foreground">{verificationEmail}</span>.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="mt-2 h-auto px-0"
+                    disabled={pending}
+                    onClick={handleResendVerificationEmail}
+                  >
+                    Resend verification email
+                  </Button>
+                </div>
+              ) : null}
             </>
           ) : null}
 
@@ -345,58 +445,39 @@ export function LoginForm({
             </>
           ) : null}
 
-          {view === "verify-email" ? (
-            <>
-              <form action={handleVerifyEmail}>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="verify-email">Email</FieldLabel>
-                    <Input
-                      id="verify-email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      value={verificationEmail}
-                      onChange={(event) => setVerificationEmail(event.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="verification-code">Verification code</FieldLabel>
-                    <Input
-                      id="verification-code"
-                      name="otp"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="123456"
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <Button type="submit" className="w-full" disabled={pending}>
-                      {pending ? "Verifying..." : "Verify email"}
-                    </Button>
-                  </Field>
-                </FieldGroup>
-              </form>
-              <div className="mt-4 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <button
+          {view === "sign-up-success" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+                <p>
+                  We have sent a confirmation email to{" "}
+                  <span className="font-medium text-foreground">
+                    {verificationEmail || "your email address"}
+                  </span>.
+                </p>
+                <p className="mt-2">
+                  Open that email and click the verification link to activate your
+                  account.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button
                   type="button"
-                  onClick={handleResendVerificationCode}
+                  variant="outline"
+                  className="w-full"
                   disabled={pending || !verificationEmail}
-                  className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-50"
+                  onClick={handleResendVerificationEmail}
                 >
-                  Resend code
-                </button>
-                <Link
-                  href="/auth/sign-in"
-                  className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
+                  {pending ? "Sending again..." : "Resend confirmation email"}
+                </Button>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => router.push("/auth/sign-in")}
                 >
                   Back to login
-                </Link>
+                </Button>
               </div>
-            </>
+            </div>
           ) : null}
 
           {view === "forgot-password" ? (
@@ -416,7 +497,7 @@ export function LoginForm({
                   </Field>
                   <Field>
                     <Button type="submit" className="w-full" disabled={pending}>
-                      {pending ? "Sending code..." : "Send reset code"}
+                      {pending ? "Sending email..." : "Send reset email"}
                     </Button>
                   </Field>
                 </FieldGroup>
@@ -438,30 +519,6 @@ export function LoginForm({
               <form action={handleResetPassword}>
                 <FieldGroup>
                   <Field>
-                    <FieldLabel htmlFor="reset-email">Email</FieldLabel>
-                    <Input
-                      id="reset-email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      value={resetEmail}
-                      onChange={(event) => setResetEmail(event.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="reset-code">Reset code</FieldLabel>
-                    <Input
-                      id="reset-code"
-                      name="otp"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="123456"
-                      required
-                    />
-                  </Field>
-                  <Field>
                     <FieldLabel htmlFor="new-password">New password</FieldLabel>
                     <Input
                       id="new-password"
@@ -471,8 +528,17 @@ export function LoginForm({
                       required
                     />
                   </Field>
+                  {!resetTokenState ? (
+                    <p className="text-sm text-destructive">
+                      This reset link is missing its token. Open the password reset email again and use that link.
+                    </p>
+                  ) : null}
                   <Field>
-                    <Button type="submit" className="w-full" disabled={pending}>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={pending || !resetTokenState}
+                    >
                       {pending ? "Resetting password..." : "Reset password"}
                     </Button>
                   </Field>
@@ -488,6 +554,13 @@ export function LoginForm({
                 </Link>
               </p>
             </>
+          ) : null}
+
+          {view === "verify-email" ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>{pending ? "Verifying your email now..." : "Finishing email verification..."}</p>
+              <p>You will be sent back to the login page once this is complete.</p>
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -515,4 +588,25 @@ export function LoginForm({
       </div>
     </div>
   );
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error) {
+    return error;
+  }
+
+  return fallback;
+}
+
+function isEmailVerificationError(message?: string) {
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return normalized.includes("email not confirmed") || normalized.includes("email not verified");
 }

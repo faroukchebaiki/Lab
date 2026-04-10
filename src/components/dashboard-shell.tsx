@@ -14,11 +14,11 @@ import {
   Printer,
   SunMedium,
 } from "lucide-react";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 import { CaoHorizontalForm } from "@/components/reports/cao-horizontal-form";
 import { HydrationForm } from "@/components/reports/hydration-form";
+import { useTheme } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
