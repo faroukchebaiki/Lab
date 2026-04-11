@@ -6,9 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Flash Journalier Lab",
+  title: "Chaux BMSD Laboratory",
   description:
-    "Daily laboratory journal with secure login, durable report storage, and printable PDF export.",
+    "Laboratory reporting platform for kiln, hydration, and quality workflows with secure access and printable exports.",
 };
 
 export default async function RootLayout({

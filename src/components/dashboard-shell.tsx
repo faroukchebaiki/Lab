@@ -1,27 +1,25 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { format, formatDistanceToNow } from "date-fns";
 import {
+  FilePlus2,
   FileSpreadsheet,
+  Flame,
   FlaskConical,
-  LayoutDashboard,
   LogOut,
   Menu,
   MoonStar,
+  PackageSearch,
   Printer,
   SunMedium,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { CaoHorizontalForm } from "@/components/reports/cao-horizontal-form";
-import { HydrationForm } from "@/components/reports/hydration-form";
 import { useTheme } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -38,47 +36,65 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/neon-auth-client";
-import { type ReportRecord } from "@/lib/report-schema";
 
 type DashboardShellProps = {
-  reports: ReportRecord[];
-  reportsError?: string | null;
+  children: React.ReactNode;
+  pageTitle: string;
+  pageDescription: string;
   username: string;
 };
 
 const navItems = [
-  { id: "create", label: "Create Reports", icon: FlaskConical },
-  { id: "saved", label: "Saved Reports", icon: FileSpreadsheet },
+  {
+    href: "/dashboard/create-report",
+    label: "Create a Report",
+    icon: FilePlus2,
+  },
+  {
+    href: "/dashboard/vertical-kiln-reports",
+    label: "Vertical Kiln Reports",
+    icon: Flame,
+  },
+  {
+    href: "/dashboard/horizontal-kiln-reports",
+    label: "Horizontale Kiln Reports",
+    icon: FlaskConical,
+  },
+  {
+    href: "/dashboard/hydration-unit-reports",
+    label: "Hydration Unit Reports",
+    icon: FileSpreadsheet,
+  },
+  {
+    href: "/dashboard/other-reports",
+    label: "Other Reports",
+    icon: PackageSearch,
+  },
 ] as const;
 
-function formatReportType(type: ReportRecord["type"]) {
-  return type === "cao-horizontal" ? "CAO Horizontal" : "Hydration";
-}
+const quickLinks = [
+  {
+    href: "/dashboard/create-report#saved-reports",
+    label: "Saved Reports",
+    icon: FileSpreadsheet,
+  },
+  {
+    href: "/dashboard/create-report#saved-reports",
+    label: "Printable Reports",
+    icon: Printer,
+  },
+] as const;
 
 export function DashboardShell({
-  reports,
-  reportsError = null,
+  children,
+  pageTitle,
+  pageDescription,
   username,
 }: DashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState("create");
-
-  let caoCount = 0;
-  let hydrationCount = 0;
-
-  for (const report of reports) {
-    if (report.type === "cao-horizontal") {
-      caoCount += 1;
-    } else {
-      hydrationCount += 1;
-    }
-  }
-
-  const latestReport = reports[0];
 
   async function logout() {
     const { error } = await authClient.signOut();
@@ -98,8 +114,15 @@ export function DashboardShell({
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader className="gap-3 px-3 py-4">
           <div className="flex items-center gap-3 rounded-xl border border-sidebar-border bg-sidebar-accent/60 px-3 py-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <LayoutDashboard className="size-5" />
+            <div className="flex h-11 w-16 items-center justify-center rounded-lg bg-white/80 p-1 shadow-sm ring-1 ring-sidebar-border/60">
+              <Image
+                src="/chaux-bmsd-logo.png"
+                alt="Chaux BMSD logo"
+                width={120}
+                height={65}
+                className="h-auto w-full object-contain"
+                priority
+              />
             </div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <p className="truncate text-sm font-semibold">Lab BMSD chaux</p>
@@ -116,11 +139,11 @@ export function DashboardShell({
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => (
-                  <SidebarMenuItem key={item.id}>
+                  <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       tooltip={item.label}
-                      isActive={activeTab === item.id}
-                      onClick={() => setActiveTab(item.id)}
+                      isActive={pathname === item.href}
+                      render={<Link href={item.href} />}
                     >
                       <item.icon />
                       <span>{item.label}</span>
@@ -137,16 +160,18 @@ export function DashboardShell({
             <SidebarGroupLabel>Quick Links</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="Printable reports"
-                    isActive={pathname.startsWith("/reports/")}
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    <Printer />
-                    <span>Printable Reports</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {quickLinks.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      tooltip={item.label}
+                      isActive={pathname === "/dashboard/create-report"}
+                      render={<Link href={item.href} />}
+                    >
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -199,10 +224,10 @@ export function DashboardShell({
               </SidebarTrigger>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                  Laboratory Dashboard
+                  {pageTitle}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Minimal workflow for daily tests and archived reports.
+                  {pageDescription}
                 </p>
               </div>
             </div>
@@ -211,143 +236,7 @@ export function DashboardShell({
             </Badge>
           </header>
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">{reports.length}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Stored for future access.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">CAO / Hydration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">
-                  {caoCount} / {hydrationCount}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Split across both lab workflows.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="sm:col-span-2 xl:col-span-1">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Latest Save</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-semibold">
-                  {latestReport
-                    ? formatDistanceToNow(new Date(latestReport.createdAt), {
-                        addSuffix: true,
-                      })
-                    : "No reports yet"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {latestReport
-                    ? `${formatReportType(latestReport.type)} • ${format(
-                        new Date(latestReport.createdAt),
-                        "dd MMM yyyy, HH:mm"
-                      )}`
-                    : "Your first saved report will appear here."}
-                </p>
-              </CardContent>
-            </Card>
-          </section>
-
-          {reportsError ? (
-            <Card className="border-amber-400/60 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-              <CardContent className="pt-6 text-sm leading-6">
-                {reportsError}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="gap-4"
-          >
-            <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-              <TabsTrigger value="create">Create Reports</TabsTrigger>
-              <TabsTrigger value="saved">Saved Reports</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="create" className="space-y-6">
-              <Tabs defaultValue="cao-horizontal" className="gap-4">
-                <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-                  <TabsTrigger value="cao-horizontal">CAO Horizontal</TabsTrigger>
-                  <TabsTrigger value="hydration">Hydration</TabsTrigger>
-                </TabsList>
-                <TabsContent value="cao-horizontal">
-                  <CaoHorizontalForm />
-                </TabsContent>
-                <TabsContent value="hydration">
-                  <HydrationForm />
-                </TabsContent>
-              </Tabs>
-            </TabsContent>
-
-            <TabsContent value="saved">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold">
-                    Saved Reports
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {reports.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                      No reports saved yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {reports.map((report) => (
-                        <div
-                          key={report.id}
-                          className="flex flex-col gap-4 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline">
-                                {formatReportType(report.type)}
-                              </Badge>
-                              <Badge variant="secondary">
-                                {report.meta.reportDate}
-                              </Badge>
-                            </div>
-                            <div>
-                              <h3 className="font-medium">{report.sectionTitle}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                Saved by {report.createdBy} •{" "}
-                                {formatDistanceToNow(new Date(report.createdAt), {
-                                  addSuffix: true,
-                                })}
-                              </p>
-                            </div>
-                          </div>
-
-                          <Link
-                            href={`/reports/${report.id}`}
-                            className={buttonVariants({ variant: "outline" })}
-                          >
-                            Open Report
-                          </Link>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+          {children}
         </main>
       </SidebarInset>
     </SidebarProvider>
