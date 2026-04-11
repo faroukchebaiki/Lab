@@ -1,13 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   FilePlus2,
   FileSpreadsheet,
   Flame,
   FlaskConical,
+  Settings,
   LogOut,
   Menu,
   MoonStar,
@@ -18,7 +19,6 @@ import {
 import { toast } from "sonner";
 
 import { useTheme } from "@/components/theme-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -40,10 +40,61 @@ import { authClient } from "@/lib/neon-auth-client";
 
 type DashboardShellProps = {
   children: React.ReactNode;
-  pageTitle: string;
-  pageDescription: string;
   username: string;
+  occupation: string;
 };
+
+const pageCopy = {
+  "/dashboard/create-report": {
+    title: "Create a Report",
+    description:
+      "Start a new laboratory report, review saved records, and move into the right reporting section for each unit.",
+  },
+  "/dashboard/vertical-kiln-reports": {
+    title: "Vertical Kiln Reports",
+    description:
+      "Use this section as the base for vertical kiln process checks, production readings, operator notes, and future printable forms.",
+  },
+  "/dashboard/horizontal-kiln-reports": {
+    title: "Horizontale Kiln Reports",
+    description:
+      "Create and manage horizontal kiln reports here, including the active CAO workflow and any future kiln monitoring sheets.",
+  },
+  "/dashboard/hydration-unit-reports": {
+    title: "Hydration Unit Reports",
+    description:
+      "Manage hydration unit measurements, density and fineness tracking, and any added hydration quality-control forms.",
+  },
+  "/dashboard/other-reports": {
+    title: "Other Reports",
+    description:
+      "Keep flexible lab workflows, custom report templates, and one-off quality documents together in one section.",
+  },
+  "/dashboard/settings": {
+    title: "Settings",
+    description:
+      "Update your account details, change your email or password, and manage profile information like birthday, occupation, department, phone, location, and bio.",
+  },
+} as const;
+
+const defaultPageCopy = {
+  title: "Laboratory Reports",
+  description:
+    "Organize report workflows by unit, keep forms separated, and build new report types on a stable base.",
+};
+
+function getBreadcrumbs(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+
+  return segments.map((segment, index) => {
+    const href = `/${segments.slice(0, index + 1).join("/")}`;
+
+    return {
+      href,
+      label: segment.replace(/-/g, " "),
+    };
+  });
+}
 
 const navItems = [
   {
@@ -88,13 +139,15 @@ const quickLinks = [
 
 export function DashboardShell({
   children,
-  pageTitle,
-  pageDescription,
   username,
+  occupation,
 }: DashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
+  const currentPageCopy =
+    pageCopy[pathname as keyof typeof pageCopy] ?? defaultPageCopy;
+  const breadcrumbs = getBreadcrumbs(pathname);
 
   async function logout() {
     const { error } = await authClient.signOut();
@@ -181,10 +234,21 @@ export function DashboardShell({
           <div className="group-data-[collapsible=icon]:hidden">
             <p className="truncate text-sm font-medium">{username}</p>
             <p className="truncate text-xs text-sidebar-foreground/70">
-              Neon authenticated
+              {occupation || "Chemical Industrial Engineer"}
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="flex-1"
+              onClick={() => router.push("/dashboard/settings")}
+              aria-label="Open settings"
+            >
+              <Settings className="size-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -216,25 +280,36 @@ export function DashboardShell({
       </Sidebar>
 
       <SidebarInset className="min-h-svh">
-        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 sm:p-6">
-          <header className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="md:hidden">
-                <Menu className="size-4" />
-              </SidebarTrigger>
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                  {pageTitle}
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  {pageDescription}
-                </p>
-              </div>
+        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 sm:p-5">
+          <header className="flex items-start gap-2">
+            <SidebarTrigger className="md:hidden">
+              <Menu className="size-4" />
+            </SidebarTrigger>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
+                {currentPageCopy.title}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {currentPageCopy.description}
+              </p>
             </div>
-            <Badge variant="outline" className="hidden sm:inline-flex">
-              {username}
-            </Badge>
           </header>
+
+          <div className="sticky top-0 z-20 -mx-4 border-y border-border/70 bg-background/95 px-4 py-1.5 backdrop-blur sm:-mx-5 sm:px-5">
+            <div className="flex flex-wrap items-center gap-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/80">
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.href} className="flex items-center gap-1">
+                  {index > 0 ? <span>&gt;</span> : null}
+                  <Link
+                    href={crumb.href}
+                    className="transition-colors hover:text-foreground"
+                  >
+                    {crumb.label}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {children}
         </main>

@@ -8,13 +8,12 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { username } = await requireDashboardUser();
+  const { username, settings } = await requireDashboardUser();
 
   return (
     <DashboardShell
-      pageTitle="Laboratory Reports"
-      pageDescription="Organize report workflows by unit, keep forms separated, and build new report types on a stable base."
       username={username}
+      occupation={settings.occupation}
     >
       {children}
     </DashboardShell>
