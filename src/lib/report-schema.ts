@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const requiredText = z.string().trim().min(1, "Required");
+const optionalText = z.string().trim().default("");
 
 export const reportTypeSchema = z.enum(["cao-horizontal", "hydration"]);
 
@@ -17,7 +18,7 @@ export const fourHorizontalRowSchema = z.object({
   id: requiredText,
   time: requiredText,
   refusalPercent: requiredText,
-  observation: requiredText,
+  observation: optionalText,
   kilnOutputTph: requiredText,
   gasDebitNm3h: requiredText,
 });
@@ -85,7 +86,15 @@ export type HydrationInput = z.output<typeof hydrationInputSchema>;
 export type ReportInput = z.output<typeof reportInputSchema>;
 export type ReportRecord = z.infer<typeof reportRecordSchema>;
 
-const now = new Date().toISOString().slice(0, 10);
+export function getTodayDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+const now = getTodayDateString();
 
 export const defaultReportMeta = {
   companyName: "CHAUX BMA",

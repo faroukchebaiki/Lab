@@ -15,6 +15,7 @@ import {
   defaultReportMeta,
   type FourHorizontalFormValues,
   fourHorizontalInputSchema,
+  getTodayDateString,
 } from "@/lib/report-schema";
 
 function getDefaultValues(): FourHorizontalFormValues {
@@ -22,7 +23,7 @@ function getDefaultValues(): FourHorizontalFormValues {
     type: "cao-horizontal",
     meta: {
       ...defaultReportMeta,
-      reportDate: new Date().toISOString().slice(0, 10),
+      reportDate: getTodayDateString(),
     },
     sectionTitle: "CAO SORTIE FOUR HORIZONTAL",
     rows: defaultCaoRows.map((row, index) => ({

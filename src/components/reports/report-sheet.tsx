@@ -4,6 +4,16 @@ import { type ReportRecord } from "@/lib/report-schema";
 
 function formatDate(value: string) {
   try {
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+    if (dateOnlyMatch) {
+      const [, year, month, day] = dateOnlyMatch;
+      return format(
+        new Date(Number(year), Number(month) - 1, Number(day)),
+        "d/M/yyyy"
+      );
+    }
+
     return format(new Date(value), "d/M/yyyy");
   } catch {
     return value;

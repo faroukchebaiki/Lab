@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   defaultHydrationBlocks,
   defaultReportMeta,
+  getTodayDateString,
   hydrationInputSchema,
   type HydrationFormValues,
 } from "@/lib/report-schema";
@@ -22,7 +23,7 @@ function getDefaultValues(): HydrationFormValues {
     type: "hydration",
     meta: {
       ...defaultReportMeta,
-      reportDate: new Date().toISOString().slice(0, 10),
+      reportDate: getTodayDateString(),
     },
     sectionTitle: "ATELIER HYDRATATION",
     blocks: defaultHydrationBlocks.map((block, index) => ({
